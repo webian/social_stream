@@ -106,9 +106,9 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
         $this->categoryRepository = GeneralUtility::makeInstance('GeorgRinger\\News\\Domain\\Repository\\CategoryRepository');
 
         if ($channel->getPosttype() == "1") {
-            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/posts?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
+            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/posts?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
         } else {
-            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/feed?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
+            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/feed?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
         }
 
         $elem = $this->getElems($url);
@@ -116,6 +116,18 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
         if (!isset($elem->data)) { return; }
 
         foreach ($elem->data as $entry) {
+            // Skip if post type not yet handled
+            $subType = $this->getSubType($entry);
+            $handledSubTypes = [
+                'status',
+                'photo',
+                'new_album',
+                'video_inline',
+                'profile_media',
+                'cover_photo',
+            ];
+            if ( !in_array($subType, $handledSubTypes, true )) { continue; }
+
             if ($entry->name || $entry->message) {
                 $new = 0;
                 $news = $this->newsRepository->findHiddenById($entry->id, $channel->getUid(), 1);
@@ -213,5 +225,17 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
                 $this->persistenceManager->persistAll();
             }
         }
+    }
+
+    /**
+     * @param $entry
+     * @return mixed
+     */
+    private function getSubType($entry) {
+        $subType = $entry->type;
+        if ($entry->attachments->data[0]->type) {
+            $subType = $entry->attachments->data[0]->type;
+        }
+        return $subType;
     }
 }
