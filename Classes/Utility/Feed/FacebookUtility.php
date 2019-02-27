@@ -113,6 +113,8 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
 
         $elem = $this->getElems($url);
 
+        if (!isset($elem->data)) { return; }
+
         foreach ($elem->data as $entry) {
             if ($entry->name || $entry->message) {
                 $new = 0;
