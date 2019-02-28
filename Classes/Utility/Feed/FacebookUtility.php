@@ -184,7 +184,7 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
                     } else {
                         // We don't have a title in the post, generate it from the post text
                         if ($entry->message) {
-                            $titleAndBody = $this->generateTitleAndBody($entry->message);
+                            $titleAndBody = $this->generateTitleAndBody($entry->message, $this->settings["maxNewsTitleLength"]);
                             // But use default title if one can't be generated
                             $newsTitle = $titleAndBody[0] != '' ? $titleAndBody[0] : $newsTitle;
                             $newsBody = $titleAndBody[1];

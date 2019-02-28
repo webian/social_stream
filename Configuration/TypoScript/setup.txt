@@ -12,6 +12,7 @@ module.tx_socialstream {
         folder = {$module.tx_socialstream.settings.folder}
         maxFilesize = {$module.tx_socialstream.settings.maxFilesize}
         locale = {$module.tx_socialstream.settings.locale}
+        maxNewsTitleLength = {$module.tx_socialstream.settings.maxNewsTitleLength}
 
         fbappid = {$module.tx_socialstream.settings.fbappid}
         fbappsecret = {$module.tx_socialstream.settings.fbappsecret}

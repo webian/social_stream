@@ -20,6 +20,8 @@ module.tx_socialstream {
         maxFilesize = 10
         # cat=social_stream//h; type=string; label= Locale of the feeds
         locale = en_GB
+        # cat=social_stream//i; type=string; label= Max news title length
+        maxNewsTitleLength = 255
         # cat=social_stream_keys/keys/a; type=string; label= Facebook App ID
         fbappid =
         # cat=social_stream_keys/keys/b; type=string; label= Facebook App Secret
