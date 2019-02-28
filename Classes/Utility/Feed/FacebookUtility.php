@@ -128,102 +128,112 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
             ];
             if ( !in_array($subType, $handledSubTypes, true )) { continue; }
 
-            if ($entry->name || $entry->message) {
-                $new = 0;
-                $news = $this->newsRepository->findHiddenById($entry->id, $channel->getUid(), 1);
-                if (!$news) {
-                    $news = new \Socialstream\SocialStream\Domain\Model\News();
-                    $new = 1;
-                }
-
-                $news->setType(0);
-                $news->setChannel($channel);
-                $cat = $this->getCategory($channel->getType());
-                $news->addCategory($cat);
-                $subcat = $this->getCategory($channel->getTitle(), $cat);
-                $news->addCategory($subcat);
-                $id = explode("_", $entry->id);
-                if ($id[1]) {
-                    $news->setObjectId($id[1]);
-                } else {
-                    $news->setObjectId($entry->id);
-                }
-                $news->setDatetime(new \DateTime($entry->created_time));
-                if ($entry->link) $news->setLink($entry->link);
-                $news->setAuthor($entry->from->name);
-                if ($entry->name) {
-                    $news->setTitle($entry->name);
-                } else {
-                    $news->setTitle($entry->from->name);
-                }
-                if ($entry->place) {
-                    $news->setPlaceName($entry->place->name);
-                    $news->setPlaceCity($entry->place->location->city);
-                    $news->setPlaceCountry($entry->place->location->country);
-                    $news->setPlaceLat($entry->place->location->latitude);
-                    $news->setPlaceLng($entry->place->location->longitude);
-                    $news->setPlaceStreet($entry->place->location->street);
-                    $news->setPlaceZip($entry->place->location->zip);
-                }
-
-                if ($entry->message) {
-                    $message = str_replace("\n", "<br/>", $entry->message);
-                    $news->setBodytext(str_replace("<br/><br/>", "<br/>", $message));
-                    if ($entry->description) {
-                        $news->setTeaser($entry->description);
-                        if ($entry->caption) $news->setAlternativeTitle($entry->caption);
-                    } else {
-                        if ($entry->caption) $news->setTeaser($entry->caption);
-                    }
-                } else {
-                    if ($entry->description) {
-                        $news->setBodytext($entry->description);
-                        if ($entry->caption) $news->setTeaser($entry->caption);
-                    } else {
-                        if ($entry->caption) $news->setBodytext($entry->caption);
-                    }
-                }
-                if ($entry->story) $news->setDescription($entry->story);
-
-                if ($new) {
-                    $this->newsRepository->add($news);
-                } else {
-                    $this->newsRepository->update($news);
-                }
-                $this->persistenceManager->persistAll();
-
-                $singlePost = json_decode(file_get_contents("https://graph.facebook.com/" . $entry->id . "/?fields=full_picture,source&access_token=" . $channel->getToken()));
-
-                $imageUrl = '';
-                $videoUrl = '';
-
-                if ($entry->source) {
-                    $videoUrl = $entry->source;
-                } else if ($singlePost->source) {
-                    $videoUrl = $singlePost->source;
-                }
-                if ($entry->full_picture) {
-                    $imageUrl = $entry->full_picture;
-                } else if ($singlePost->full_picture) {
-                    $imageUrl = $singlePost->full_picture;
-                }
-
-
-                $media = $this->validateMedia($channel, $imageUrl, $videoUrl);
-
-
-                if (is_array($media)) {
-                    if ($media['link']) {
-                        $news->setMediaUrl($media['link']);
-                    }
-                    if ($media['media_url']) {
-                        $this->processNewsMedia($news, $media['media_url']);
-                    }
-                }
-
-                $this->newsRepository->update($news);
-                $this->persistenceManager->persistAll();
+            $new = 0;
+            $news = $this->newsRepository->findHiddenById($entry->id, $channel->getUid(), 1);
+            if (!$news) {
+                $news = new \Socialstream\SocialStream\Domain\Model\News();
+                $new = 1;
             }
+
+            $news->setType(0);
+            $news->setChannel($channel);
+            $cat = $this->getCategory($channel->getType());
+            $news->addCategory($cat);
+            $subcat = $this->getCategory($channel->getTitle(), $cat);
+            $news->addCategory($subcat);
+            $id = explode("_", $entry->id);
+            if ($id[1]) {
+                $news->setObjectId($id[1]);
+            } else {
+                $news->setObjectId($entry->id);
+            }
+            $news->setDatetime(new \DateTime($entry->created_time));
+            if ($entry->link) $news->setLink($entry->link);
+            $news->setAuthor($entry->from->name);
+
+            if ($entry->place) {
+                $news->setPlaceName($entry->place->name);
+                $news->setPlaceCity($entry->place->location->city);
+                $news->setPlaceCountry($entry->place->location->country);
+                $news->setPlaceLat($entry->place->location->latitude);
+                $news->setPlaceLng($entry->place->location->longitude);
+                $news->setPlaceStreet($entry->place->location->street);
+                $news->setPlaceZip($entry->place->location->zip);
+            }
+
+            $newsTitle = $channel->getTitle() . ' - ' . $entry->type; // Set a default title
+            $newsBody = ''; // News body defaults to empty
+            switch ($subType) {
+                case 'profile_media':
+                case 'cover_photo':
+                    // Cases where we don't want to use 'name' because it's not well explaining
+                    if ($entry->story) {
+                        $newsTitle = $entry->story;
+                    }
+                    break;
+                case 'status':
+                case 'photo':
+                case 'new_album':
+                case 'video_inline':
+                    // Cases where we could have a title
+                    if ($entry->name) {
+                        // We have a title in the post, use it
+                        $newsTitle = $entry->name;
+                        // Also set the news body
+                        $newsBody = $entry->message;
+                    } else {
+                        // We don't have a title in the post, generate it from the post text
+                        if ($entry->message) {
+                            $titleAndBody = $this->generateTitleAndBody($entry->message);
+                            // But use default title if one can't be generated
+                            $newsTitle = $titleAndBody[0] != '' ? $titleAndBody[0] : $newsTitle;
+                            $newsBody = $titleAndBody[1];
+                        }
+                    }
+                    break;
+            }
+            $news->setTitle($newsTitle);
+            $news->setBodytext($newsBody);
+            $news->setDescription($newsBody != '' ? $newsBody : $newsTitle);
+
+            if ($new) {
+                $this->newsRepository->add($news);
+            } else {
+                $this->newsRepository->update($news);
+            }
+            $this->persistenceManager->persistAll();
+
+            $singlePost = json_decode(file_get_contents("https://graph.facebook.com/" . $entry->id . "/?fields=full_picture,source&access_token=" . $channel->getToken()));
+
+            $imageUrl = '';
+            $videoUrl = '';
+
+            if ($entry->source) {
+                $videoUrl = $entry->source;
+            } else if ($singlePost->source) {
+                $videoUrl = $singlePost->source;
+            }
+            if ($entry->full_picture) {
+                $imageUrl = $entry->full_picture;
+            } else if ($singlePost->full_picture) {
+                $imageUrl = $singlePost->full_picture;
+            }
+
+
+            $media = $this->validateMedia($channel, $imageUrl, $videoUrl);
+
+
+            if (is_array($media)) {
+                if ($media['link']) {
+                    $news->setMediaUrl($media['link']);
+                }
+                if ($media['media_url']) {
+                    $this->processNewsMedia($news, $media['media_url']);
+                }
+            }
+
+            $this->newsRepository->update($news);
+            $this->persistenceManager->persistAll();
         }
     }
 

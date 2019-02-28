@@ -121,6 +121,58 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
     }
 
     /**
+     * @param $string
+     * @param int $maxTitleLength
+     * @return array
+     */
+    function generateTitleAndBody($string, $maxTitleLength = 50)
+    {
+        // Init returning variable
+        $titleAndBody = [];
+        $titleAndBody[0] = ''; // The title
+        $titleAndBody[1] = ''; // The body
+
+        // Clean up the string
+        $string = trim($string);
+
+        if (strlen($string) > $maxTitleLength) {
+            // Split string into sentences and take first sentence
+            $sentences = preg_split('/(?<=[.?!])\s+(?=[a-z])/i', $string);
+
+            // Remove repeated ending punctuation (!?) from first sentence (possible title)
+            $titleAndBody[0] = preg_replace('/[\s?!]*(?=[\s?!]$)/', '$1', $sentences[0]);
+
+            if (strlen($titleAndBody[0]) > $maxTitleLength) {
+                // Title is still too long, it will be cropped so it will be repeated inside body
+                $titleSelfExplainatory = false;
+
+                // Title (first sentence) is still too long, truncate it
+                $stringCut = substr($titleAndBody[0], 0, $maxTitleLength);
+                $endPoint = strrpos($stringCut, ' ');
+
+                // if the string doesn't contain any space then it will cut without word basis.
+                $titleAndBody[0] = $endPoint ? substr($stringCut, 0, $endPoint) : substr($stringCut, 0);
+                $titleAndBody[0] .= '…';
+            } else {
+                $titleSelfExplainatory = true;
+            }
+
+            foreach ($sentences as $key => $sentence) {
+                // Don't include title in the body if it is self explainatory
+                if ($key === 0 && $titleSelfExplainatory) { continue; }
+
+                $titleAndBody[1] .= trim($sentence) . ' ';
+            }
+            $titleAndBody[1] = str_replace("\n", "<br/>", $titleAndBody[1]);
+            $titleAndBody[1] = str_replace("<br/><br/>", "<br/>", $titleAndBody[1]);
+        } else {
+            // Short string, use it for title (empty body)
+            $titleAndBody[0] = $string;
+        }
+        return $titleAndBody;
+    }
+
+    /**
      * @param $elems
      * @return mixed
      */
