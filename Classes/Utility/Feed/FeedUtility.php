@@ -29,7 +29,10 @@ namespace Socialstream\SocialStream\Utility\Feed;
  ***************************************************************/
 
 use TYPO3\CMS\Core\Resource\Folder;
-use \TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\DataHandling\DataHandler;
+use TYPO3\CMS\Core\Resource\DuplicationBehavior;
 
 /**
  * FeedUtility
@@ -283,7 +286,7 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         if ($err) {
             echo "cURL Error #:" . $err;
         } else {
-            $imageName = $model->getObjectId() . "." . $this->getExtensionFromMimeType(curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
+            $imageName = pathinfo(parse_url($url)['path'])['basename'];
             return array(
                 'imageName' => $imageName,
                 'image' => $response
@@ -298,73 +301,87 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
      * @param $field
      * @param Folder $folder
      * @param $imageUrl
+     * @throws \TYPO3\CMS\Core\Resource\Exception\ExistingTargetFileNameException
      */
     protected function processMedia($model, $table, $field, $folder, $imageUrl)
     {
         $imageArray = $this->grabImage($imageUrl, $model);
+        if (!isset($imageArray['image']) || !isset($imageArray['imageName'])) { return; }
 
+        /**
+         * Save the image, eventually replace if already exists
+         */
         $imageName = $imageArray['imageName'];
 
+        if (file_exists($this->settings["tmp"] . $imageName)) {
+            unlink($this->settings["tmp"] . $imageName);
+        }
+        $fp = fopen($this->settings["tmp"] . $imageName, 'x');
+        fwrite($fp, $imageArray['image']);
+        fclose($fp);
+
+        /** @var \TYPO3\CMS\Core\Resource\ResourceStorage $storage */
         $storage = $this->getStorage();
 
-        if ((!$folder->hasFile($imageName) && $imageName) || ($storage->getFileInFolder($imageName, $folder)->getSize() <= 0 && $folder->hasFile($imageName) && $imageName)) {
-            if (file_exists($this->settings["tmp"] . $imageName)) {
-                unlink($this->settings["tmp"] . $imageName);
-            }
-            $fp = fopen($this->settings["tmp"] . $imageName, 'x');
-            fwrite($fp, $imageArray['image']);
-            fclose($fp);
+        /** @var \TYPO3\CMS\Core\Resource\File $importedImage */
+        $importedImage = $storage->addFile(
+            $this->settings["tmp"] . $imageName,
+            $folder,
+            $imageName,
+            DuplicationBehavior::REPLACE,
+            true
+        );
 
-            if (filesize($this->settings["tmp"] . $imageName) > 0) {
-                $movedNewFile = $storage->addFile($this->settings["tmp"] . $imageName, $folder, $imageName, \TYPO3\CMS\Core\Resource\DuplicationBehavior::REPLACE);
-                $image = $movedNewFile->getUid();
-            }
+        $importedImageUid = $importedImage->getUid();
 
-            if ($table == "tx_socialstream_domain_model_channel") {
-                if ($model->getImage()) {
-                    $GLOBALS["TYPO3_DB"]->exec_UPDATEquery("sys_file_reference", "uid=" . $model->getImage()->getUid(), array('deleted' => '1'));
-                }
-            } elseif ($table == "tx_news_domain_model_news") {
-                if (count($model->getFalMedia()) > 0) {
-                    $media = $model->getFalMedia()->current();
-                    if ($media) {
-                        $GLOBALS["TYPO3_DB"]->exec_UPDATEquery("sys_file_reference", "uid=" . $media->getUid(), array('deleted' => '1'));
-                    }
-                }
-            }
-        } elseif ($table == "tx_socialstream_domain_model_channel") {
-            if (!$model->getImage() && $imageName) {
-                $image = $storage->getFileInFolder($imageName, $folder);
-                $image = $image->getUid();
-            }
-        } elseif ($table == "tx_news_domain_model_news") {
-            if (count($model->getFalMedia()) <= 0 && $imageName) {
-                $image = $storage->getFileInFolder($imageName, $folder);
-                $image = $image->getUid();
-            }
+        /**
+         * Delete existing relation
+         */
+        $command = [];
+        $modelUid = $model->getUid();
+
+        /** @var \TYPO3\CMS\Core\Database\Connection $connectionFileReference */
+        $connectionFileReference = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('sys_file_reference');
+        $queryBuilderFileReference = $connectionFileReference->createQueryBuilder();
+        $queryBuilderFileReference->getRestrictions()->removeAll();
+        $statementFileReference = $queryBuilderFileReference->select('uid')
+            ->from('sys_file_reference')
+            ->where(
+                $queryBuilderFileReference->expr()->eq('tablenames', $queryBuilderFileReference->createNamedParameter($table, \PDO::PARAM_STR)),
+                $queryBuilderFileReference->expr()->eq('fieldname', $queryBuilderFileReference->createNamedParameter($field, \PDO::PARAM_STR)),
+                $queryBuilderFileReference->expr()->eq('uid_foreign', $queryBuilderFileReference->createNamedParameter($modelUid, \PDO::PARAM_INT)),
+                $queryBuilderFileReference->expr()->eq('uid_local', $queryBuilderFileReference->createNamedParameter($importedImageUid, \PDO::PARAM_INT))
+            )
+            ->execute();
+
+        /** @noinspection PhpAssignmentInConditionInspection */
+        while ($referenceRecord = $statementFileReference->fetch()) {
+            $command['sys_file_reference'][$referenceRecord['uid']] = [ 'delete' => 1 ];
         }
 
-        if ($image) {
-            $data = array();
-            $data['sys_file_reference']['NEW12345'] = array(
-                'uid_local' => $image,
-                'uid_foreign' => $model->getUid(), // uid of your content record
-                'tablenames' => $table,
-                'fieldname' => $field,
-                'pid' => $this->settings["storagePid"], // parent id of the parent page
-                'table_local' => 'sys_file',
-                'showinpreview' => 1,
-            );
-            $data[$table][$model->getUid()] = array($field => 'NEW12345'); // set to the number of images?
+        /**
+         * Add new relation
+         */
+        $data = [];
+        $newId = 'NEW' . $importedImageUid;
+        $data['sys_file_reference'][$newId] = [
+            'table_local' => 'sys_file',
+            'uid_local' => $importedImageUid,
+            'tablenames' => $table,
+            'uid_foreign' => $modelUid,
+            'fieldname' => $field,
+            'pid' => (int)$this->settings["storagePid"],
+            'showinpreview' => 1,
+        ];
+        $data[$table][$modelUid] = [
+            $field => $newId
+        ];
 
-            /** @var \TYPO3\CMS\Core\DataHandling\DataHandler $tce */
-            $tce = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\CMS\Core\DataHandling\DataHandler'); // create TCE instance
-            $tce->bypassAccessCheckForRecords = TRUE;
-            $tce->start($data, array());
-            $tce->admin = TRUE;
-            $tce->process_datamap();
-            $clear = 1;
-        }
+        /** @var DataHandler $dataHandler */
+        $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+        $dataHandler->start($data, $command);
+        $dataHandler->process_datamap();
+        $dataHandler->process_cmdmap();
     }
 
     /**
