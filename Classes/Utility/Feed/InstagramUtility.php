@@ -146,8 +146,6 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
             $createTime->setTimestamp($entry->created_time);
             $news->setDatetime($createTime);
 
-            $news->setTitle($entry->user->username);
-
             $news->setType(0);
             $news->setChannel($channel);
 
@@ -170,10 +168,20 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
                 $news->setPlaceLng($entry->location->longitude);
             }
 
+            $newsTitle = $entry->user->username; // Set a default title
+            $newsBody = ''; // News body defaults to empty
             if ($entry->caption->text) {
-                $news->setBodytext($entry->caption->text);
-                $news->setDescription($entry->caption->text);
+                $titleAndBody = $this->generateTitleAndBody(
+                    $this->cleanUpPostText($entry->caption->text),
+                    $this->settings["maxNewsTitleLength"]
+                );
+                // But use default title if one can't be generated
+                $newsTitle = $titleAndBody[0] != '' ? $titleAndBody[0] : $newsTitle;
+                $newsBody = $titleAndBody[1];
             }
+            $news->setTitle($newsTitle);
+            $news->setBodytext($newsBody);
+            $news->setDescription($newsBody != '' ? $newsBody : $newsTitle);
 
             if ($new) {
                 $this->newsRepository->add($news);
@@ -232,5 +240,19 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
             $this->newsRepository->update($news);
             $this->persistenceManager->persistAll();
         }
+    }
+
+    /**
+     * @param string $string
+     * @return string
+     */
+    function cleanUpPostText($string = '')
+    {
+        // Remove multiple "vertical" dots
+        $string = preg_replace('/(\n\.)+/', '', $string);
+        // Separate attached hashtags
+        $string = preg_replace('/(\w)#/', '$1 #', $string);
+
+        return $string;
     }
 }
