@@ -122,6 +122,8 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
         $url = "https://api.instagram.com/v1/users/" . $channel->getObjectId() . "/media/recent/?access_token=" . $channel->getToken() . "&count=" . $limit;
         $elem = $this->getElems($url);
 
+        if (!isset($elem->data)) { return; }
+
         foreach ($elem->data as $entry) {
 
             $new = 0;
