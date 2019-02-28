@@ -232,6 +232,27 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
                 }
             }
 
+            // Get other attachments if present
+            if (is_array($entry->attachments->data[0]->subattachments->data)) {
+                foreach ($entry->attachments->data[0]->subattachments->data as $key => $attachment) {
+                    if ($key === 0) { continue; } // Skip first attachment because it has been already imported
+
+                    if ($attachment->type == 'photo') {
+                        $imageUrl = $attachment->media->image->src;
+                        $videoUrl = '';
+                        $media = $this->validateMedia($channel, $imageUrl, $videoUrl);
+                        if (is_array($media)) {
+                            if ($media['link']) {
+                                $news->setMediaUrl($media['link']);
+                            }
+                            if ($media['media_url']) {
+                                $this->processNewsMedia($news, $media['media_url']);
+                            }
+                        }
+                    }
+                }
+            }
+
             $this->newsRepository->update($news);
             $this->persistenceManager->persistAll();
         }
