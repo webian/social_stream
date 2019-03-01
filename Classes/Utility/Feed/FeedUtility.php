@@ -286,7 +286,12 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         if ($err) {
             echo "cURL Error #:" . $err;
         } else {
-            $imageName = pathinfo(parse_url($url)['path'])['basename'];
+            $urlPath = parse_url($url)['path'];
+            if (substr($urlPath, -4) == '.php') {
+                $imageName = $model->getObjectId() . "." . $this->getExtensionFromMimeType(curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
+            } else {
+                $imageName = pathinfo($urlPath)['basename'];
+            }
             return array(
                 'imageName' => $imageName,
                 'image' => $response
