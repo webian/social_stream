@@ -299,6 +299,8 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         $response = curl_exec($curl);
         $err = curl_error($curl);
 
+        curl_close($curl);
+
         if ($err) {
             echo "cURL Error #:" . $err;
         } else {
@@ -313,7 +315,6 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
                 'image' => $response
             );
         }
-        curl_close($curl);
     }
 
     /**
