@@ -183,17 +183,19 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
                 case 'video_inline':
                 case 'share':
                 case 'avatar':
-                        // We have a title in the post, use it
-                        $newsTitle = $entry->name;
-                        // Also set the news body
-                        $newsBody = $entry->message;
+                    // Usually FB post 'name' are automatic and not good as title because they are equal between posts,
+                    // so use it only if there's no 'message'
+                    if ($entry->message) {
+                        $titleAndBody = $this->generateTitleAndBody(
+                            $this->cleanUpPostText($entry->message),
+                            $this->settings["maxNewsTitleLength"]
+                        );
+                        // But use default title if one can't be generated
+                        $newsTitle = $titleAndBody[0] != '' ? $titleAndBody[0] : $newsTitle;
+                        $newsBody = $titleAndBody[1];
                     } else {
-                        // We don't have a title in the post, generate it from the post text
-                        if ($entry->message) {
-                            $titleAndBody = $this->generateTitleAndBody($entry->message, $this->settings["maxNewsTitleLength"]);
-                            // But use default title if one can't be generated
-                            $newsTitle = $titleAndBody[0] != '' ? $titleAndBody[0] : $newsTitle;
-                            $newsBody = $titleAndBody[1];
+                        if ($entry->name) {
+                            $newsTitle = $entry->name;
                         }
                     }
                     break;
