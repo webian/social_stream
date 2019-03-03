@@ -46,11 +46,16 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
      */
     public $clearStrings = array('\ud83c\u', '\ud83d\u', '\ud83e\u', '\u2600\u');
 
+    /** @var \TYPO3\CMS\Core\Log\Logger */
+    protected $logger;
+
     /**
      * __construct
      */
     public function __construct($pid = 0)
     {
+        $this->logger = GeneralUtility::makeInstance('TYPO3\CMS\Core\Log\LogManager')->getLogger(__CLASS__);
+
         if ($pid) {
             $this->initTSFE($pid, 0);
             $this->initSettings();
