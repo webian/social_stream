@@ -143,9 +143,13 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         // Clean up the string
         $string = trim($string);
 
-        if (strlen($string) > $maxTitleLength) {
+        // Split string by newlines
+        $lines = explode("\n", $string);
+        $possibleTitle = $lines[0];
+
+        if (strlen($possibleTitle) > $maxTitleLength) {
             // Split string into sentences and take first sentence
-            $sentences = preg_split('/(?<=[.?!])\s+(?=[a-z])/i', $string);
+            $sentences = preg_split('/(?<=[.?!])\s+(?=[a-z])/i', $possibleTitle);
 
             // Remove repeated ending punctuation (!?) from first sentence (possible title)
             $titleAndBody[0] = preg_replace('/[\s?!]*(?=[\s?!]$)/', '$1', $sentences[0]);
@@ -175,8 +179,18 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
             $titleAndBody[1] = str_replace("<br/><br/>", "<br/>", $titleAndBody[1]);
         } else {
             // Short string, use it for title (empty body)
-            $titleAndBody[0] = $string;
+            $titleAndBody[0] = $possibleTitle;
         }
+
+        // Add other lines (skipping the first one) to the body
+        foreach ($lines as $key => $line) {
+            // Don't include first line (title)
+            if ($key === 0) { continue; }
+            $titleAndBody[1] .= trim($line) . "\n";
+        }
+        // Trim body to remove last newline
+        $titleAndBody[1] = trim($titleAndBody[1]);
+
         return $titleAndBody;
     }
 
