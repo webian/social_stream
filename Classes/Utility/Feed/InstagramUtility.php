@@ -71,7 +71,7 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
                     $this->sendTokenInfoMail($channel, $this->settings["sysmail"], $this->settings["sendermail"]);
                 }
             } else {
-                $msg = "Fehler: Channel konnte nicht gecrawlt werden. Object Id oder Token falsch.";
+                $msg = "Error: Channel could not be crawled. Object Id or token wrong.";
                 //$this->addFlashMessage($msg, '', AbstractMessage::ERROR);
                 $this->objectManager = \TYPO3\CMS\Core\Utility\GeneralUtility::makeInstance('TYPO3\\CMS\\Extbase\\Object\\ObjectManager');
                 $this->addFlashMessage($msg, '', FlashMessage::ERROR, $this->objectManager->get(FlashMessageService::class));
