@@ -123,10 +123,13 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
             $handledSubTypes = [
                 'status',
                 'photo',
+                'album',
                 'new_album',
                 'video_inline',
                 'profile_media',
                 'cover_photo',
+                'share',
+                'avatar',
             ];
             if ( !in_array($subType, $handledSubTypes, true )) { continue; }
 
@@ -175,10 +178,11 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
                     break;
                 case 'status':
                 case 'photo':
+                case 'album':
                 case 'new_album':
                 case 'video_inline':
-                    // Cases where we could have a title
-                    if ($entry->name) {
+                case 'share':
+                case 'avatar':
                         // We have a title in the post, use it
                         $newsTitle = $entry->name;
                         // Also set the news body
