@@ -302,24 +302,38 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         ));
 
         $response = curl_exec($curl);
-        $err = curl_error($curl);
+        $requestInfo = curl_getinfo($curl);
 
         curl_close($curl);
 
-        if ($err) {
-            echo "cURL Error #:" . $err;
-        } else {
+        $imageName = null;
+        $image = null;
+        if ($requestInfo["http_code"] == 200) {
+            $image = $response;
             $urlPath = parse_url($url)['path'];
             if (substr($urlPath, -4) == '.php') {
                 $imageName = $model->getObjectId() . "." . $this->getExtensionFromMimeType(curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
             } else {
                 $imageName = pathinfo($urlPath)['basename'];
             }
-            return array(
-                'imageName' => $imageName,
-                'image' => $response
+        } else {
+            $this->logger->warning(
+                'Error getting post image',
+                [
+                    'curl_url' => $requestInfo['url'],
+                    'curl_response' => $response,
+                    'curl_http_code' => $requestInfo['http_code'],
+                    'curl_content_type' => $requestInfo['content_type'],
+                    'curl_download_content_length' => $requestInfo['download_content_length'],
+                    'curl_size_download' => $requestInfo['size_download'],
+                ]
             );
         }
+
+        return [
+            'imageName' => $imageName,
+            'image' => $image
+        ];
     }
 
     /**
