@@ -176,6 +176,22 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
     }
 
     /**
+     * @param string $string
+     * @return string
+     */
+    public function cleanUpPostText($string = '')
+    {
+        // Remove multiple "new line"
+        $string = preg_replace('/(\n)+/', "\n", $string);
+        // Remove multiple "vertical" dots
+        $string = preg_replace('/(\n\.)+/', '', $string);
+        // Separate attached hashtags
+        $string = preg_replace('/(\w)#/', '$1 #', $string);
+
+        return $string;
+    }
+
+    /**
      * @param $elems
      * @return mixed
      */

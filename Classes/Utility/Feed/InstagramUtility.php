@@ -241,18 +241,4 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
             $this->persistenceManager->persistAll();
         }
     }
-
-    /**
-     * @param string $string
-     * @return string
-     */
-    function cleanUpPostText($string = '')
-    {
-        // Remove multiple "vertical" dots
-        $string = preg_replace('/(\n\.)+/', '', $string);
-        // Separate attached hashtags
-        $string = preg_replace('/(\w)#/', '$1 #', $string);
-
-        return $string;
-    }
 }
