@@ -4,7 +4,7 @@ return array(
     'ctrl' => array(
         'title' => 'LLL:EXT:social_stream/Resources/Private/Language/locallang_db.xlf:tx_socialstream_domain_model_channel',
         'label' => 'object_id',
-        'label_userFunc' => 'EXT:social_stream/Classes/Userfuncs/Label.php:Socialstream\\SocialStream\\Userfuncs\\Label->getPageLabel',
+        'label_userFunc' => 'Socialstream\\SocialStream\\Userfuncs\\Label->getPageLabel',
         'tstamp' => 'tstamp',
         'crdate' => 'crdate',
         'cruser_id' => 'cruser_id',
