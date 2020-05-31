@@ -89,9 +89,14 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
      */
     public function getElems($url)
     {
-        $elems = GeneralUtility::getUrl($url);
-        $elems = $this->clearString($elems);
-        return json_decode($elems);
+        $report = [];
+        $elems = GeneralUtility::getUrl($url, false, null, $report);
+        if ($elems) {
+            $elems = $this->clearString($elems);
+        } else {
+            $this->logger->warning('Error getting posts', $report);
+        }
+        return $elems ? json_decode($elems) : false;
     }
 
     /**
@@ -307,7 +312,7 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_ENCODING => "",
             CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => 300,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => "GET",
             CURLOPT_HTTPHEADER => array(
@@ -318,10 +323,32 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
         $response = curl_exec($curl);
         $requestInfo = curl_getinfo($curl);
 
-        curl_close($curl);
-
         $imageName = null;
         $image = null;
+
+        if (
+            !$response
+            || curl_errno($curl) !== CURLE_OK
+            || !isset($requestInfo)
+            || $requestInfo["http_code"] != 200
+            || $requestInfo["download_content_length"] === 0
+            || $requestInfo["header_size"] === 0
+        ) {
+            $this->logger->warning(
+                'Something wrong',
+                [
+                    'curl_url' => $requestInfo['url'],
+                    'curl_error' => curl_errno($curl),
+                    'curl_response' => $response,
+                    'curl_http_code' => $requestInfo['http_code'],
+                    'curl_content_type' => $requestInfo['content_type'],
+                    'curl_download_content_length' => $requestInfo['download_content_length'],
+                    'curl_size_download' => $requestInfo['size_download'],
+                ]
+            );
+            return [ 'imageName' => null, 'image' => null ];
+        }
+
         if ($requestInfo["http_code"] == 200) {
             $image = $response;
             $urlPath = parse_url($url)['path'];
@@ -329,6 +356,10 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
                 $imageName = $model->getObjectId() . "." . $this->getExtensionFromMimeType(curl_getinfo($curl, CURLINFO_CONTENT_TYPE));
             } else {
                 $imageName = pathinfo($urlPath)['basename'];
+            }
+            // Convert jpeg extension to jpg
+            if (substr($imageName, -5) === '.jpeg') {
+                $imageName = substr($imageName, 0, -4) . 'jpg';
             }
         } else {
             $this->logger->warning(
@@ -343,6 +374,8 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
                 ]
             );
         }
+
+        curl_close($curl);
 
         return [
             'imageName' => $imageName,
@@ -368,75 +401,87 @@ class FeedUtility extends \Socialstream\SocialStream\Utility\BaseUtility
          */
         $imageName = $imageArray['imageName'];
 
-        if (file_exists($this->settings["tmp"] . $imageName)) {
-            unlink($this->settings["tmp"] . $imageName);
+        $tempImgFile = GeneralUtility::tempnam('', $imageName);
+        GeneralUtility::writeFile($tempImgFile, $imageArray['image']);
+        unset($imageArray['image']); // Free RAM
+
+        $fileInfo = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Type\File\FileInfo::class, $tempImgFile);
+        $imageInfo = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Type\File\ImageInfo::class, $tempImgFile);
+        if (strpos($fileInfo->getMimeType(), 'image') === 0 && ($imageInfo->getWidth() === 0 || $imageInfo->getHeight() === 0)) {
+            // If it's an image with width or height = 0
+            $this->logger->warning(
+                'Tmp image size zero',
+                [
+                    'tmp image name' => $this->settings["tmp"] . $imageName
+                ]
+            );
+        } else {
+            // If it's an image with width and height != 0 or it's a video
+            /** @var \TYPO3\CMS\Core\Resource\ResourceStorage $storage */
+            $storage = $this->getStorage();
+
+            /** @var \TYPO3\CMS\Core\Resource\File $importedImage */
+            $importedImage = $storage->addFile(
+                $tempImgFile,
+                $folder,
+                $imageName,
+                DuplicationBehavior::REPLACE,
+                true
+            );
+
+            $importedImageUid = $importedImage->getUid();
+
+            /**
+             * Delete existing relation
+             */
+            $command = [];
+            $modelUid = $model->getUid();
+
+            /** @var \TYPO3\CMS\Core\Database\Connection $connectionFileReference */
+            $connectionFileReference = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('sys_file_reference');
+            $queryBuilderFileReference = $connectionFileReference->createQueryBuilder();
+//        $queryBuilderFileReference->getRestrictions()->removeAll();
+            $statementFileReference = $queryBuilderFileReference->select('uid')
+                ->from('sys_file_reference')
+                ->where(
+                    $queryBuilderFileReference->expr()->eq('tablenames', $queryBuilderFileReference->createNamedParameter($table, \PDO::PARAM_STR)),
+                    $queryBuilderFileReference->expr()->eq('fieldname', $queryBuilderFileReference->createNamedParameter($field, \PDO::PARAM_STR)),
+                    $queryBuilderFileReference->expr()->eq('uid_foreign', $queryBuilderFileReference->createNamedParameter($modelUid, \PDO::PARAM_INT)),
+                    $queryBuilderFileReference->expr()->eq('uid_local', $queryBuilderFileReference->createNamedParameter($importedImageUid, \PDO::PARAM_INT))
+                )
+                ->execute();
+
+            /** @noinspection PhpAssignmentInConditionInspection */
+            while ($referenceRecord = $statementFileReference->fetch()) {
+                $command['sys_file_reference'][$referenceRecord['uid']] = [ 'delete' => 1 ];
+            }
+
+            /**
+             * Add new relation
+             */
+            $data = [];
+            $newId = 'NEW' . $importedImageUid;
+            $data['sys_file_reference'][$newId] = [
+                'table_local' => 'sys_file',
+                'uid_local' => $importedImageUid,
+                'tablenames' => $table,
+                'uid_foreign' => $modelUid,
+                'fieldname' => $field,
+                'pid' => (int)$this->settings["storagePid"],
+                'showinpreview' => 1,
+            ];
+            $data[$table][$modelUid] = [
+                $field => $newId
+            ];
+
+            /** @var DataHandler $dataHandler */
+            $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
+            $dataHandler->start($data, $command);
+            $dataHandler->process_datamap();
+            $dataHandler->process_cmdmap();
         }
-        $fp = fopen($this->settings["tmp"] . $imageName, 'x');
-        fwrite($fp, $imageArray['image']);
-        fclose($fp);
 
-        /** @var \TYPO3\CMS\Core\Resource\ResourceStorage $storage */
-        $storage = $this->getStorage();
-
-        /** @var \TYPO3\CMS\Core\Resource\File $importedImage */
-        $importedImage = $storage->addFile(
-            $this->settings["tmp"] . $imageName,
-            $folder,
-            $imageName,
-            DuplicationBehavior::REPLACE,
-            true
-        );
-
-        $importedImageUid = $importedImage->getUid();
-
-        /**
-         * Delete existing relation
-         */
-        $command = [];
-        $modelUid = $model->getUid();
-
-        /** @var \TYPO3\CMS\Core\Database\Connection $connectionFileReference */
-        $connectionFileReference = GeneralUtility::makeInstance(ConnectionPool::class)->getConnectionForTable('sys_file_reference');
-        $queryBuilderFileReference = $connectionFileReference->createQueryBuilder();
-        $queryBuilderFileReference->getRestrictions()->removeAll();
-        $statementFileReference = $queryBuilderFileReference->select('uid')
-            ->from('sys_file_reference')
-            ->where(
-                $queryBuilderFileReference->expr()->eq('tablenames', $queryBuilderFileReference->createNamedParameter($table, \PDO::PARAM_STR)),
-                $queryBuilderFileReference->expr()->eq('fieldname', $queryBuilderFileReference->createNamedParameter($field, \PDO::PARAM_STR)),
-                $queryBuilderFileReference->expr()->eq('uid_foreign', $queryBuilderFileReference->createNamedParameter($modelUid, \PDO::PARAM_INT)),
-                $queryBuilderFileReference->expr()->eq('uid_local', $queryBuilderFileReference->createNamedParameter($importedImageUid, \PDO::PARAM_INT))
-            )
-            ->execute();
-
-        /** @noinspection PhpAssignmentInConditionInspection */
-        while ($referenceRecord = $statementFileReference->fetch()) {
-            $command['sys_file_reference'][$referenceRecord['uid']] = [ 'delete' => 1 ];
-        }
-
-        /**
-         * Add new relation
-         */
-        $data = [];
-        $newId = 'NEW' . $importedImageUid;
-        $data['sys_file_reference'][$newId] = [
-            'table_local' => 'sys_file',
-            'uid_local' => $importedImageUid,
-            'tablenames' => $table,
-            'uid_foreign' => $modelUid,
-            'fieldname' => $field,
-            'pid' => (int)$this->settings["storagePid"],
-            'showinpreview' => 1,
-        ];
-        $data[$table][$modelUid] = [
-            $field => $newId
-        ];
-
-        /** @var DataHandler $dataHandler */
-        $dataHandler = GeneralUtility::makeInstance(DataHandler::class);
-        $dataHandler->start($data, $command);
-        $dataHandler->process_datamap();
-        $dataHandler->process_cmdmap();
+        GeneralUtility::unlink_tempfile($tempImgFile);
     }
 
     /**

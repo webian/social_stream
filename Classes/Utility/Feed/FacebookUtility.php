@@ -108,9 +108,9 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
         $this->categoryRepository = GeneralUtility::makeInstance('GeorgRinger\\News\\Domain\\Repository\\CategoryRepository');
 
         if ($channel->getPosttype() == "1") {
-            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/posts?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
+            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/posts?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){media,type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
         } else {
-            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/feed?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
+            $url = "https://graph.facebook.com/" . $channel->getObjectId() . "/feed?fields=id,created_time,link,permalink_url,place,type,message,full_picture,object_id,picture,name,caption,description,story,source,from,attachments.limit(10){media,type,subattachments}&access_token=" . $channel->getToken() . "&limit=" . $limit . "&locale=" . $this->settings["locale"];
         }
 
         $elem = $this->getElems($url);

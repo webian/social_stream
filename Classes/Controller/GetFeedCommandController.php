@@ -98,8 +98,8 @@ class GetFeedCommandController extends \TYPO3\CMS\Extbase\Mvc\Controller\Command
         foreach ($channels as $channel){
             $utility = FeedUtility::getUtility($channel->getType(),$rootPage);
             $channel = $utility->renewToken($channel);
-            $ch = $utility->getChannel($channel);
-            $this->channelRepository->update($ch);
+//            $ch = $utility->getChannel($channel);
+//            $this->channelRepository->update($ch);
             $utility->getFeed($channel,$utility->settings["limitPosts"]);
         }
     }
