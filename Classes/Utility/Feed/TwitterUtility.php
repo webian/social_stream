@@ -196,7 +196,7 @@ class TwitterUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtility
                 $news->setObjectId($newsId);
 
                 $news->setLink("https://www.twitter.com/" . $entry["user"]["screen_name"] . "/status/" . $entry["id_str"]);
-                $news->setAuthor($entry["user"]["name"]);
+//                $news->setAuthor($entry["user"]["name"]);
 
 
                 if ($entry["place"]) {

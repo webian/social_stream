@@ -154,7 +154,7 @@ class FacebookUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtilit
             }
             $news->setDatetime(new \DateTime($entry->created_time));
             if ($entry->link) $news->setLink($entry->link);
-            $news->setAuthor($entry->from->name);
+//            $news->setAuthor($entry->from->name);
 
             if ($entry->place) {
                 $news->setPlaceName($entry->place->name);

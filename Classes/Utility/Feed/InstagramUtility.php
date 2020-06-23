@@ -159,7 +159,7 @@ class InstagramUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtili
             $news->setObjectId($newsId);
 
             if ($entry->link) $news->setLink($entry->link);
-            $news->setAuthor($entry->user->full_name);
+//            $news->setAuthor($entry->user->full_name);
 
 
             if ($entry->location) {

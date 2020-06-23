@@ -70,7 +70,7 @@ class FacebookeventUtility extends \Socialstream\SocialStream\Utility\Feed\Faceb
             $news->setDatetime(new \DateTime($entry->start_time));
             $news->setDatetimeend(new \DateTime($entry->end_time));
             if($entry->link)$news->setLink($entry->link);
-            $news->setAuthor($entry->owner->name);
+//            $news->setAuthor($entry->owner->name);
             if($entry->name)$news->setTitle($entry->name);
             if($entry->place){
                 $news->setPlaceName($entry->place->name);

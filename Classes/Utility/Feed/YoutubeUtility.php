@@ -160,7 +160,7 @@ class YoutubeUtility extends \Socialstream\SocialStream\Utility\Feed\FeedUtility
                                     $news->setObjectId($playlistItem->snippet->resourceId->videoId);
 
                                     $news->setLink("https://www.youtube.com/watch?v=" . $playlistItem->snippet->resourceId->videoId);
-                                    $news->setAuthor($playlistItem->snippet->channelTitle);
+//                                    $news->setAuthor($playlistItem->snippet->channelTitle);
 
                                     $news->setBodytext($playlistItem->snippet->description);
                                     $news->setDescription($playlistItem->snippet->description);
